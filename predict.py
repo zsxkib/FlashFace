@@ -11,10 +11,11 @@ import numpy as np
 from PIL import Image
 from typing import List
 import torch.cuda.amp as amp
+from PIL import Image, ImageDraw
 import torchvision.transforms as T
-
-mimetypes.add_type("image/webp", ".webp")
-
+from ldm import data, models, ops
+from ldm.models.vae import sd_v1_vae
+from ldm.models.retinaface import crop_face, retinaface
 
 sys.path.append("flashface/all_finetune")
 from config import cfg
@@ -22,14 +23,16 @@ from models import sd_v1_ref_unet
 from ops.context_diffusion import ContextGaussianDiffusion
 from utils import Compose, PadToSquare, get_padding, seed_everything
 
-from ldm import data, models, ops
-from ldm.models.retinaface import crop_face, retinaface
-from ldm.models.vae import sd_v1_vae
-
-from PIL import Image, ImageDraw
-
 MODEL_CACHE = "cache"
-
+mimetypes.add_type("image/webp", ".webp")
+WEIGHT_URLS = [
+    "https://weights.replicate.delivery/default/FlashFace/cache/README.md",
+    "https://weights.replicate.delivery/default/FlashFace/cache/bpe_simple_vocab_16e6.txt.gz",
+    "https://weights.replicate.delivery/default/FlashFace/cache/flashface.ckpt",
+    "https://weights.replicate.delivery/default/FlashFace/cache/openai-clip-vit-large-14.pth",
+    "https://weights.replicate.delivery/default/FlashFace/cache/retinaface_resnet50.pth",
+    "https://weights.replicate.delivery/default/FlashFace/cache/sd-v1-vae.pth",
+]
 
 def download_weights(url, dest):
     start = time.time()
@@ -51,19 +54,10 @@ def download_weights(url, dest):
 class Predictor(BasePredictor):
     def setup(self) -> None:
         # Load the necessary models and weights
-        urls = [
-            "https://weights.replicate.delivery/default/FlashFace/cache/README.md",
-            "https://weights.replicate.delivery/default/FlashFace/cache/bpe_simple_vocab_16e6.txt.gz",
-            "https://weights.replicate.delivery/default/FlashFace/cache/flashface.ckpt",
-            "https://weights.replicate.delivery/default/FlashFace/cache/openai-clip-vit-large-14.pth",
-            "https://weights.replicate.delivery/default/FlashFace/cache/retinaface_resnet50.pth",
-            "https://weights.replicate.delivery/default/FlashFace/cache/sd-v1-vae.pth",
-        ]
-
         if not os.path.exists(MODEL_CACHE):
             os.makedirs(MODEL_CACHE)
 
-        for url in urls:
+        for url in WEIGHT_URLS:
             filename = url.split("/")[-1]
             dest_path = os.path.join(MODEL_CACHE, filename)
             if not os.path.exists(dest_path):
